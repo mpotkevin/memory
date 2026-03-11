@@ -13,12 +13,14 @@
             font-family: 'Noto Sans TC', sans-serif;
             background-color: #f8fafc;
             color: #1e293b;
-            user-select: none;
+            overscroll-behavior-y: contain; /* 防止下拉刷新影響操作 */
         }
 
+        /* 拖曳排序樣式 */
         .item-card {
             transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
             cursor: grab;
+            touch-action: none; /* 禁用預設觸控動作以利拖曳 */
         }
 
         .item-card:active {
@@ -29,7 +31,7 @@
             opacity: 0.5;
             transform: scale(1.05);
             border-color: #6366f1;
-            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
         }
 
         .xp-bar-fill {
@@ -39,20 +41,23 @@
         .brain-badge {
             background: linear-gradient(135deg, #e0e7ff 0%, #eef2ff 100%);
             border: 1px solid #c7d2fe;
+            font-size: 0.7rem;
         }
 
-        /* Stopwatch Sidebar */
-        .stopwatch-sidebar {
-            position: fixed;
-            right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 30;
+        /* 歷史紀錄摺疊動畫 */
+        .history-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease-out;
+        }
+
+        .history-content.expanded {
+            max-height: 2000px;
         }
 
         /* 滾動條美化 */
         ::-webkit-scrollbar {
-            width: 6px;
+            width: 4px;
         }
         ::-webkit-scrollbar-track {
             background: #f1f5f9;
@@ -62,13 +67,13 @@
             border-radius: 10px;
         }
 
-        @media (max-width: 1280px) {
-            .stopwatch-sidebar {
-                position: static;
-                transform: none;
-                margin-bottom: 20px;
-                display: flex;
-                justify-content: center;
+        @media (max-width: 640px) {
+            .item-card {
+                width: 5rem !important;
+                padding: 0.75rem !important;
+            }
+            .item-card .text-4xl {
+                font-size: 1.875rem !important;
             }
         }
     </style>
@@ -77,147 +82,117 @@
 
     <!-- Top Navigation -->
     <nav class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3">
-        <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
-            <div class="flex items-center space-x-3">
-                <div class="bg-indigo-700 text-white p-2.5 rounded-xl shadow-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div class="max-w-6xl mx-auto flex items-center justify-between gap-2">
+            <div class="flex items-center space-x-2 md:space-x-3">
+                <div class="bg-indigo-700 text-white p-2 rounded-xl shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md:h-6 md:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                 </div>
-                <div>
-                    <h1 class="font-black text-slate-800 tracking-tight text-lg text-nowrap">故事串聯大師 <span class="text-indigo-600 font-bold italic">PRO</span></h1>
-                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">Cognitive Neuro-Rehabilitation</div>
+                <div class="overflow-hidden">
+                    <h1 class="font-black text-slate-800 tracking-tight text-sm md:text-lg truncate">故事串聯大師 <span class="text-indigo-600 font-bold italic">PRO</span></h1>
+                    <div class="hidden xs:block text-[8px] md:text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">Cognitive Neuro-Rehabilitation</div>
                 </div>
             </div>
 
-            <div class="flex items-center space-x-4">
-                <div class="hidden md:flex flex-col items-end mr-4 border-r border-slate-200 pr-4">
-                    <div class="text-[10px] text-slate-500 font-black uppercase mb-1 tracking-tighter">訓練等級：<span id="user-level" class="text-indigo-600">1</span></div>
-                    <div class="w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div class="flex items-center space-x-2 md:space-x-4">
+                <div class="hidden sm:flex flex-col items-end mr-2 border-r border-slate-200 pr-3">
+                    <div class="text-[9px] text-slate-500 font-black uppercase mb-1">等級：<span id="user-level" class="text-indigo-600">1</span></div>
+                    <div class="w-20 md:w-28 h-1 bg-slate-100 rounded-full overflow-hidden">
                         <div id="xp-fill" class="xp-bar-fill h-full bg-indigo-600 w-0"></div>
                     </div>
                 </div>
                 
-                <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-                    <button onclick="changeStage(1)" id="btn-stage-1" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all">階段 1</button>
-                    <button onclick="changeStage(2)" id="btn-stage-2" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all">階段 2</button>
-                    <button onclick="changeStage(3)" id="btn-stage-3" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all">階段 3</button>
+                <div class="flex bg-slate-100 p-0.5 md:p-1 rounded-lg border border-slate-200">
+                    <button onclick="changeStage(1)" id="btn-stage-1" class="px-2 py-1 md:px-4 md:py-1.5 rounded-md text-[10px] md:text-xs font-bold transition-all">階段 1</button>
+                    <button onclick="changeStage(2)" id="btn-stage-2" class="px-2 py-1 md:px-4 md:py-1.5 rounded-md text-[10px] md:text-xs font-bold transition-all">階段 2</button>
+                    <button onclick="changeStage(3)" id="btn-stage-3" class="px-2 py-1 md:px-4 md:py-1.5 rounded-md text-[10px] md:text-xs font-bold transition-all">階段 3</button>
                 </div>
             </div>
         </div>
     </nav>
 
-    <!-- Stopwatch Sidebar Widget -->
-    <aside class="stopwatch-sidebar">
-        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl flex flex-col items-center w-40">
-            <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-nowrap">本次訓練計時</div>
-            <div id="stopwatch-display" class="text-3xl font-black text-slate-800 tabular-nums">00:00</div>
-            <div class="flex space-x-2 mt-4">
-                <button id="timer-toggle-btn" class="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" id="play-pause-icon" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-                <button onclick="resetTimer()" class="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-            </div>
-        </div>
-    </aside>
-
-    <main class="max-w-6xl mx-auto px-4 py-8">
+    <main class="max-w-4xl mx-auto px-4 py-6 md:py-10">
         
-        <!-- Professional Header & Brain Region Info -->
-        <section class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10">
-            <div class="lg:col-span-8">
-                <h2 id="stage-title" class="text-3xl font-black text-slate-800 mb-3 tracking-tight">訓練階段載入中...</h2>
-                <div class="flex flex-wrap gap-2 mb-4" id="brain-regions-container">
-                    <!-- Brain badges injected here -->
-                </div>
-                <p id="stage-desc" class="text-slate-500 leading-relaxed font-medium text-sm md:text-base"></p>
+        <!-- Professional Header -->
+        <section class="grid grid-cols-1 md:grid-cols-12 gap-6 mb-8">
+            <div class="md:col-span-8">
+                <h2 id="stage-title" class="text-xl md:text-2xl font-black text-slate-800 mb-2 tracking-tight">載入訓練階段...</h2>
+                <div class="flex flex-wrap gap-1.5 mb-3" id="brain-regions-container"></div>
+                <p id="stage-desc" class="text-slate-500 leading-relaxed font-medium text-xs md:text-sm"></p>
             </div>
             
-            <div class="lg:col-span-4 flex flex-col justify-center">
-                <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                    <div class="flex items-center justify-between mb-4">
-                        <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">目標詞彙數量</span>
-                        <span id="count-display" class="bg-indigo-50 px-3 py-1 rounded-lg text-indigo-700 font-black text-sm">2</span>
+            <div class="md:col-span-4 flex flex-col justify-center">
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">目標數量</span>
+                        <span id="count-display" class="text-indigo-700 font-black text-sm">2</span>
                     </div>
                     <input type="range" id="item-count-slider" min="2" max="10" value="2" 
-                        class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
-                    <div class="flex justify-between text-[10px] text-slate-400 mt-3 font-bold px-1 uppercase tracking-widest">
-                        <span>基礎聯結</span>
-                        <span>高階認知訓練</span>
-                    </div>
+                        class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
                 </div>
             </div>
         </section>
 
-        <!-- Interactive Training Board -->
-        <div class="bg-white border border-slate-200 rounded-[2.5rem] p-6 md:p-12 shadow-sm relative">
-            <div class="relative z-10">
-                <div class="flex items-center justify-center space-x-3 mb-10">
-                    <span class="h-[1px] w-12 bg-slate-100"></span>
-                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.3em]">直接拖曳物件以調整邏輯順序</span>
-                    <span class="h-[1px] w-12 bg-slate-100"></span>
-                </div>
+        <!-- Training Board -->
+        <div class="bg-white border border-slate-200 rounded-[2rem] p-5 md:p-10 shadow-sm relative">
+            <div class="flex items-center justify-center space-x-2 mb-8 text-[9px] md:text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+                <span>拖曳物件調整順序</span>
+            </div>
 
-                <!-- Items Container (Drag & Drop Area) -->
-                <div id="items-board" class="flex flex-wrap items-center justify-center gap-6 min-h-[220px]">
-                    <!-- Item cards will be rendered here -->
-                </div>
+            <!-- Items Container -->
+            <div id="items-board" class="flex flex-wrap items-center justify-center gap-3 md:gap-4 min-h-[140px]">
+                <!-- Item cards will be rendered here -->
+            </div>
 
-                <!-- Input Area -->
-                <div class="mt-12 max-w-3xl mx-auto">
-                    <div class="relative group">
-                        <div class="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-slate-400 rounded-[2.2rem] opacity-0 group-focus-within:opacity-10 transition duration-500"></div>
-                        <textarea id="story-input" 
-                            class="relative w-full bg-slate-50 border border-slate-200 rounded-[2rem] p-6 md:p-8 text-xl focus:bg-white focus:border-indigo-500 focus:outline-none transition-all resize-none min-h-[220px] leading-relaxed shadow-inner font-medium"
-                            placeholder="請根據上方排列順序，進行內容建構..."></textarea>
-                        <div id="char-count" class="absolute bottom-6 right-8 text-[10px] font-black text-slate-300 uppercase tracking-widest">0 字</div>
-                    </div>
-
-                    <div class="flex flex-col sm:flex-row gap-4 mt-8">
-                        <button onclick="reshuffleItems()" class="flex-1 px-8 py-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold rounded-2xl transition-all flex items-center justify-center space-x-2">
-                            <span>🔄 更新訓練詞彙</span>
-                        </button>
-                        <button id="submit-btn" class="flex-[2] px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl shadow-indigo-100 transition-all active:scale-[0.98] flex items-center justify-center space-x-2">
-                            <span class="text-lg">完成內容並提交</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                            </svg>
-                        </button>
-                    </div>
+            <!-- Input Area -->
+            <div class="mt-8 max-w-2xl mx-auto">
+                <textarea id="story-input" 
+                    class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 md:p-6 text-base md:text-lg focus:bg-white focus:border-indigo-500 focus:outline-none transition-all resize-none min-h-[160px] leading-relaxed shadow-inner"
+                    placeholder="請根據排列順序編寫故事內容..."></textarea>
+                
+                <div class="flex flex-col sm:flex-row gap-3 mt-6">
+                    <button onclick="reshuffleItems()" class="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-bold rounded-xl transition-all">
+                        🔄 更新詞彙
+                    </button>
+                    <button id="submit-btn" class="flex-1 px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center space-x-2">
+                        <span>完成內容並提交</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>
 
-        <!-- Training Logs -->
-        <section class="mt-20">
-            <div class="flex items-center space-x-4 mb-8">
-                <div class="h-8 w-1.5 bg-indigo-600 rounded-full"></div>
-                <h3 class="text-2xl font-black text-slate-800 tracking-tight">專業訓練紀錄回顧</h3>
-            </div>
-            <div id="history-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div class="col-span-full py-16 text-center border-2 border-dashed border-slate-200 rounded-[2.5rem] bg-slate-50/50">
-                    <p class="text-slate-400 font-bold tracking-wide">目前無存檔數據。提交後的訓練內容將顯示於此。</p>
+        <!-- Collapsible History -->
+        <section class="mt-12 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+            <button onclick="toggleHistory()" class="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                <div class="flex items-center space-x-3">
+                    <div class="h-6 w-1 bg-indigo-600 rounded-full"></div>
+                    <h3 class="text-sm md:text-base font-black text-slate-800 tracking-tight">檢視專業訓練紀錄</h3>
+                </div>
+                <svg id="history-arrow" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+            <div id="history-content" class="history-content bg-slate-50/30">
+                <div id="history-list" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="col-span-full py-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest italic">
+                        尚無訓練存檔數據
+                    </div>
                 </div>
             </div>
         </section>
     </main>
 
-    <!-- Success Feedback Overlay -->
+    <!-- Overlay Feedback -->
     <div id="success-overlay" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-        <div class="bg-white rounded-[3rem] shadow-2xl p-10 max-w-sm w-full text-center transform transition-all duration-300 scale-95 opacity-0" id="modal-content">
-            <div class="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl shadow-inner">✓</div>
-            <h4 class="text-2xl font-black text-slate-800 mb-3">訓練評估完成</h4>
-            <p id="success-text" class="text-slate-500 mb-8 leading-relaxed font-medium text-sm">個案已成功完成本次內容建構，神經編碼與時序固化練習已同步更新。</p>
-            <div class="space-y-3">
-                <button onclick="closeSuccess()" class="w-full py-4 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition-all shadow-lg active:scale-95">確認並進入下一個練習</button>
-                <div class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">認知積分更新：+ <span id="xp-gain">0</span></div>
-            </div>
+        <div class="bg-white rounded-[2.5rem] shadow-2xl p-8 max-w-xs w-full text-center transform transition-all duration-300 scale-95 opacity-0" id="modal-content">
+            <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">✓</div>
+            <h4 class="text-xl font-black text-slate-800 mb-2">訓練建構完成</h4>
+            <p class="text-slate-500 mb-6 leading-relaxed font-medium text-xs">大腦神經編碼與時序固化練習已同步更新至紀錄中。</p>
+            <button onclick="closeSuccess()" class="w-full py-3.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all shadow-lg active:scale-95">確認並繼續</button>
         </div>
     </div>
 
@@ -234,18 +209,9 @@
             { name: "西瓜", icon: "🍉" }, { name: "草莓", icon: "🍓" }, { name: "巧克力", icon: "🍫" }, { name: "牛奶", icon: "🥛" },
             { name: "壽司", icon: "🍣" }, { name: "披薩", icon: "🍕" }, { name: "雞蛋", icon: "🥚" }, { name: "冰淇淋", icon: "🍦" },
             { name: "拉麵", icon: "🍜" }, { name: "甜甜圈", icon: "🍩" }, { name: "蛋糕", icon: "🍰" }, { name: "水蜜桃", icon: "🍑" },
-            { name: "飯糰", icon: "🍙" }, { name: "啤酒", icon: "🍺" }, { name: "紅酒", icon: "🍷" }, { name: "牛排", icon: "🥩" },
-            { name: "薯條", icon: "🍟" }, { name: "三明治", icon: "🥪" }, { name: "餅乾", icon: "🍪" }, { name: "爆米花", icon: "🍿" },
-            { name: "自行車", icon: "🚲" }, { name: "汽車", icon: "🚗" }, { name: "飛機", icon: "✈️" }, { name: "船", icon: "🚢" },
-            { name: "火車", icon: "🚆" }, { name: "巴士", icon: "🚌" }, { name: "地圖", icon: "🗺️" }, { name: "行李箱", icon: "🧳" },
-            { name: "滑板", icon: "🛹" }, { name: "直升機", icon: "🚁" }, { name: "火箭", icon: "🚀" }, { name: "紅綠燈", icon: "🚦" },
-            { name: "安全帽", icon: "🪖" }, { name: "通行證", icon: "🎫" }, { name: "護照", icon: "🛂" }, { name: "羅盤", icon: "🧭" },
-            { name: "電腦", icon: "💻" }, { name: "手機", icon: "📱" }, { name: "書本", icon: "📖" }, { name: "鋼筆", icon: "✒️" },
-            { name: "耳機", icon: "🎧" }, { name: "相機", icon: "📷" }, { name: "信封", icon: "✉️" }, { name: "剪刀", icon: "✂️" },
-            { name: "蝴蝶", icon: "🦋" }, { name: "仙人掌", icon: "🌵" }, { name: "玫瑰", icon: "🌹" }, { name: "太陽", icon: "☀️" },
-            { name: "月亮", icon: "🌙" }, { name: "雲朵", icon: "☁️" }, { name: "彩虹", icon: "🌈" }, { name: "雪花", icon: "❄️" },
-            { name: "海浪", icon: "🌊" }, { name: "落葉", icon: "🍂" }, { name: "蘑菇", icon: "🍄" }, { name: "小貓", icon: "🐱" },
-            { name: "小狗", icon: "🐶" }, { name: "鋼琴", icon: "🎹" }, { name: "足球", icon: "⚽" }, { name: "拼圖", icon: "🧩" }
+            { name: "飯糰", icon: "🍙" }, { name: "火車", icon: "🚆" }, { name: "地圖", icon: "🗺️" }, { name: "電腦", icon: "💻" },
+            { name: "手機", icon: "📱" }, { name: "書本", icon: "📖" }, { name: "蝴蝶", icon: "🦋" }, { name: "太陽", icon: "☀️" },
+            { name: "彩虹", icon: "🌈" }, { name: "月亮", icon: "🌙" }, { name: "小狗", icon: "🐶" }, { name: "拼圖", icon: "🧩" }
         ];
 
         let state = {
@@ -256,9 +222,7 @@
             level: 1,
             history: [],
             draggedIndex: null,
-            timer: 0,
-            timerInterval: null,
-            isTimerRunning: false
+            startTime: 0
         };
 
         window.onload = () => {
@@ -273,99 +237,39 @@
                 document.getElementById('count-display').innerText = state.itemCount;
                 reshuffleItems();
             };
-
-            document.getElementById('story-input').oninput = (e) => {
-                document.getElementById('char-count').innerText = `${e.target.value.length} 字`;
-            };
-
             document.getElementById('submit-btn').onclick = handleSubmit;
-            document.getElementById('timer-toggle-btn').onclick = toggleTimer;
         }
 
-        // Timer Logic
-        function startTimer() {
-            if (state.isTimerRunning) return;
-            state.isTimerRunning = true;
-            updateTimerIcon();
-            state.timerInterval = setInterval(() => {
-                state.timer++;
-                updateTimerDisplay();
-            }, 1000);
-        }
-
-        function stopTimer() {
-            state.isTimerRunning = false;
-            updateTimerIcon();
-            clearInterval(state.timerInterval);
-        }
-
-        function resetTimer() {
-            stopTimer();
-            state.timer = 0;
-            updateTimerDisplay();
-            startTimer();
-        }
-
-        function updateTimerDisplay() {
-            const mins = Math.floor(state.timer / 60).toString().padStart(2, '0');
-            const secs = (state.timer % 60).toString().padStart(2, '0');
-            document.getElementById('stopwatch-display').innerText = `${mins}:${secs}`;
-        }
-
-        function updateTimerIcon() {
-            const icon = document.getElementById('play-pause-icon');
-            if (state.isTimerRunning) {
-                // Pause Icon
-                icon.innerHTML = `<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />`;
-            } else {
-                // Play Icon
-                icon.innerHTML = `<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />`;
-            }
-        }
-
-        function toggleTimer() {
-            if (state.isTimerRunning) stopTimer();
-            else startTimer();
+        function toggleHistory() {
+            const content = document.getElementById('history-content');
+            const arrow = document.getElementById('history-arrow');
+            content.classList.toggle('expanded');
+            arrow.classList.toggle('rotate-180');
         }
 
         function changeStage(stage) {
             state.currentStage = stage;
-            const defaultCounts = [0, 2, 3, 4];
-            state.itemCount = defaultCounts[stage];
+            state.itemCount = [0, 2, 3, 4][stage];
             document.getElementById('item-count-slider').value = state.itemCount;
             document.getElementById('count-display').innerText = state.itemCount;
 
             const config = {
-                1: { 
-                    title: "階段 1：基礎語義編碼訓練", 
-                    desc: "本階段旨在強化『前額葉』的工作記憶與『枕葉/顳葉』的視覺辨識。請嘗試利用視覺心像將兩個詞彙鎖定，建立初步的神經聯結。",
-                    brains: ["前額葉皮質 (策略編碼)", "枕葉/顳葉 (視覺心像)"]
-                },
-                2: { 
-                    title: "階段 2：海馬迴時序固化訓練", 
-                    desc: "重點在於活化『海馬迴』的陳述性記憶。請建立具備嚴謹因果關係的時序腳本，前項內容必須觸發後項動作，模擬大腦新資訊固化的過程。",
-                    brains: ["海馬迴 (情境記憶固化)", "前額葉 (執行功能)"]
-                },
-                3: { 
-                    title: "階段 3：自我參考效應訓練", 
-                    desc: "極大化『自我生成效應』。將個案本人納入故事核心，這能顯著提升前額葉與海馬迴的深度協作，讓記憶提取路徑變得更加穩固。",
-                    brains: ["前額葉皮質 (自我參考)", "海馬迴 (深度提取)", "頂葉 (空間搜尋)"]
-                }
+                1: { title: "階段 1：基礎語義編碼訓練", desc: "強化『前額葉』工作記憶與『視覺心像』。利用一個明確動作將詞彙鎖定。", brains: ["前額葉皮質", "枕葉/顳葉"] },
+                2: { title: "階段 2：海馬迴時序固化", desc: "活化『海馬迴』陳述性記憶。建立嚴謹因果關係腳本，模擬新資訊固化過程。", brains: ["海馬迴", "前額葉執行功能"] },
+                3: { title: "階段 3：自我參考效應", desc: "利用『自我生成效應』。將個案納入故事核心，大幅提升提取路徑的穩固性。", brains: ["前額葉自我參考", "海馬迴深度提取"] }
             };
 
             document.getElementById('stage-title').innerText = config[stage].title;
             document.getElementById('stage-desc').innerText = config[stage].desc;
-            
-            const badgeContainer = document.getElementById('brain-regions-container');
-            badgeContainer.innerHTML = config[stage].brains.map(b => 
-                `<span class="brain-badge px-3 py-1 rounded-full text-[10px] font-black text-indigo-700 uppercase tracking-tighter">${b}</span>`
+            document.getElementById('brain-regions-container').innerHTML = config[stage].brains.map(b => 
+                `<span class="brain-badge px-2 py-0.5 rounded-full font-black text-indigo-700 tracking-tighter uppercase">${b}</span>`
             ).join('');
 
             [1, 2, 3].forEach(i => {
                 const btn = document.getElementById(`btn-stage-${i}`);
                 btn.className = (i === stage) 
-                    ? "px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-white shadow-sm text-indigo-700 border border-slate-200"
-                    : "px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-slate-600";
+                    ? "px-3 py-1 md:px-4 md:py-1.5 rounded-md text-[10px] md:text-xs font-bold transition-all bg-white shadow-sm text-indigo-700 border border-slate-200"
+                    : "px-3 py-1 md:px-4 md:py-1.5 rounded-md text-[10px] md:text-xs font-bold transition-all text-slate-400 hover:text-slate-600";
             });
 
             reshuffleItems();
@@ -374,10 +278,9 @@
         function reshuffleItems() {
             const shuffled = [...ITEMS_POOL].sort(() => 0.5 - Math.random());
             state.items = shuffled.slice(0, state.itemCount);
+            state.startTime = Date.now(); // 隱形計時器開始
             renderBoard();
             document.getElementById('story-input').value = "";
-            document.getElementById('char-count').innerText = "0 字";
-            resetTimer(); // Reset stopwatch on new round
         }
 
         function renderBoard() {
@@ -386,120 +289,60 @@
             
             state.items.forEach((item, idx) => {
                 const card = document.createElement('div');
-                card.className = "item-card relative bg-white border border-slate-200 rounded-[2rem] p-6 w-32 md:w-40 flex flex-col items-center shadow-sm hover:shadow-md";
+                card.className = "item-card relative bg-white border border-slate-200 rounded-2xl p-4 w-24 md:w-32 flex flex-col items-center shadow-sm";
                 card.draggable = true;
                 card.dataset.index = idx;
                 
-                card.addEventListener('dragstart', handleDragStart);
-                card.addEventListener('dragover', handleDragOver);
-                card.addEventListener('drop', handleDrop);
-                card.addEventListener('dragend', handleDragEnd);
+                // 拖曳事件 (支援電腦)
+                card.addEventListener('dragstart', e => { state.draggedIndex = idx; card.classList.add('dragging'); });
+                card.addEventListener('dragover', e => e.preventDefault());
+                card.addEventListener('drop', e => {
+                    const targetIdx = parseInt(card.dataset.index);
+                    const items = [...state.items];
+                    const movedItem = items.splice(state.draggedIndex, 1)[0];
+                    items.splice(targetIdx, 0, movedItem);
+                    state.items = items;
+                    renderBoard();
+                });
+                card.addEventListener('dragend', () => card.classList.remove('dragging'));
 
                 card.innerHTML = `
-                    <div class="text-xs font-black text-slate-300 absolute top-4 left-0 right-0 text-center uppercase tracking-widest pointer-events-none">NO. ${idx + 1}</div>
-                    <div class="text-4xl md:text-5xl mt-2 mb-3 pointer-events-none">${item.icon}</div>
-                    <div class="font-black text-slate-800 text-sm md:text-base tracking-tight pointer-events-none">${item.name}</div>
-                    <div class="mt-2 w-8 h-1 bg-slate-100 rounded-full pointer-events-none"></div>
+                    <div class="text-[8px] font-black text-slate-300 absolute top-2 left-0 right-0 text-center uppercase tracking-widest">${idx + 1}</div>
+                    <div class="text-3xl md:text-4xl mt-1 mb-2 pointer-events-none">${item.icon}</div>
+                    <div class="font-bold text-slate-800 text-[10px] md:text-sm tracking-tight pointer-events-none text-center">${item.name}</div>
                 `;
                 board.appendChild(card);
             });
         }
 
-        function handleDragStart(e) {
-            state.draggedIndex = parseInt(this.dataset.index);
-            this.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-        }
-
-        function handleDragOver(e) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            return false;
-        }
-
-        function handleDrop(e) {
-            e.stopPropagation();
-            const targetIndex = parseInt(this.dataset.index);
-            
-            if (state.draggedIndex !== targetIndex) {
-                const items = [...state.items];
-                const movedItem = items.splice(state.draggedIndex, 1)[0];
-                items.splice(targetIndex, 0, movedItem);
-                state.items = items;
-                renderBoard();
-            }
-            return false;
-        }
-
-        function handleDragEnd() {
-            this.classList.remove('dragging');
-            state.draggedIndex = null;
-        }
-
         function handleSubmit() {
             const val = document.getElementById('story-input').value.trim();
-            if (val.length < 5) {
-                showToast("內容深度不足，建議補充更具體的動作細節。");
-                return;
-            }
+            if (val.length < 5) return showToast("內容深度不足。");
+            if (state.currentStage === 3 && !(val.includes("我") || val.includes("自己"))) return showToast("需納入『自我』參考點。");
 
-            if (state.currentStage === 3 && !(val.includes("我") || val.includes("自己"))) {
-                showToast("第三階段需納入『自我』參考點。");
-                return;
-            }
+            // 計算耗時 (隱形計時)
+            const durationMs = Date.now() - state.startTime;
+            const mins = Math.floor(durationMs / 60000).toString().padStart(2, '0');
+            const secs = Math.floor((durationMs % 60000) / 1000).toString().padStart(2, '0');
+            const finalTime = `${mins}:${secs}`;
 
-            stopTimer(); // Stop timer on successful submission
-
-            const totalXP = state.itemCount * 12 + state.currentStage * 20;
-            state.xp += totalXP;
-            if (state.xp >= 100) {
-                state.level += 1;
-                state.xp %= 100;
-            }
-
-            const timeSpent = document.getElementById('stopwatch-display').innerText;
+            // XP 邏輯
+            state.xp += 25;
+            if (state.xp >= 100) { state.level++; state.xp %= 100; }
 
             const record = {
-                id: Date.now(),
                 stage: state.currentStage,
                 items: state.items.map(i => i.name).join(' → '),
                 text: val,
-                timeSpent: timeSpent,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                duration: finalTime,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             };
             state.history.unshift(record);
 
             updateStats();
             renderHistory();
-            showSuccess(totalXP);
-            
-            confetti({
-                particleCount: 150,
-                spread: 70,
-                origin: { y: 0.7 },
-                colors: ['#6366f1', '#4f46e5', '#818cf8']
-            });
-        }
-
-        function showSuccess(xp) {
-            document.getElementById('xp-gain').innerText = xp;
-            const overlay = document.getElementById('success-overlay');
-            const content = document.getElementById('modal-content');
-            overlay.classList.remove('hidden');
-            setTimeout(() => {
-                content.classList.remove('scale-95', 'opacity-0');
-                content.classList.add('scale-100', 'opacity-100');
-            }, 10);
-        }
-
-        function closeSuccess() {
-            const content = document.getElementById('modal-content');
-            content.classList.remove('scale-100', 'opacity-100');
-            content.classList.add('scale-95', 'opacity-0');
-            setTimeout(() => {
-                document.getElementById('success-overlay').classList.add('hidden');
-                reshuffleItems();
-            }, 300);
+            showSuccess();
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.7 } });
         }
 
         function updateStats() {
@@ -510,26 +353,39 @@
         function renderHistory() {
             const list = document.getElementById('history-list');
             list.innerHTML = state.history.map(item => `
-                <div class="bg-white border border-slate-200 p-6 rounded-[2.5rem] shadow-sm hover:border-indigo-300 transition-all">
-                    <div class="flex justify-between items-center mb-4">
-                        <span class="text-[9px] font-black uppercase px-2 py-1 rounded bg-slate-100 text-slate-500 tracking-wider">階段 ${item.stage}</span>
+                <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm border-l-4 border-l-indigo-500">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-[8px] font-black uppercase text-indigo-500 tracking-wider">階段 ${item.stage} </span>
                         <div class="flex items-center space-x-2">
-                            <span class="text-[10px] text-indigo-500 font-bold bg-indigo-50 px-2 py-0.5 rounded">耗時 ${item.timeSpent}</span>
-                            <span class="text-[10px] text-slate-400 font-bold">${item.time}</span>
+                            <span class="text-[9px] font-black bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded">耗時 ${item.duration}</span>
+                            <span class="text-[8px] text-slate-400 font-bold uppercase">${item.timestamp}</span>
                         </div>
                     </div>
-                    <div class="text-xs font-bold text-indigo-700 mb-3 tracking-tight">${item.items}</div>
-                    <p class="text-sm text-slate-700 leading-relaxed font-medium">${item.text}</p>
+                    <div class="text-[10px] font-bold text-slate-500 mb-2">${item.items}</div>
+                    <p class="text-xs text-slate-700 leading-relaxed">${item.text}</p>
                 </div>
             `).join('');
         }
 
+        function showSuccess() {
+            const overlay = document.getElementById('success-overlay');
+            const content = document.getElementById('modal-content');
+            overlay.classList.remove('hidden');
+            setTimeout(() => { content.classList.remove('scale-95', 'opacity-0'); content.classList.add('scale-100', 'opacity-100'); }, 10);
+        }
+
+        function closeSuccess() {
+            const content = document.getElementById('modal-content');
+            content.classList.replace('scale-100', 'scale-95'); content.classList.replace('opacity-100', 'opacity-0');
+            setTimeout(() => { document.getElementById('success-overlay').classList.add('hidden'); reshuffleItems(); }, 300);
+        }
+
         function showToast(msg) {
-            const toast = document.createElement('div');
-            toast.className = "fixed top-24 left-1/2 -translate-x-1/2 z-[100] bg-slate-900 text-white px-8 py-3 rounded-2xl shadow-2xl font-bold text-xs animate-bounce text-nowrap";
-            toast.innerText = msg;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 2500);
+            const t = document.createElement('div');
+            t.className = "fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-slate-800 text-white px-6 py-2 rounded-full shadow-2xl font-bold text-[10px] animate-bounce";
+            t.innerText = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 2000);
         }
     </script>
 </body>
